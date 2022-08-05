@@ -61,38 +61,28 @@ function softmax(x)
 sum(exp.(x))
 end
 
-function loglikelihood_k_ones(root::ProbCircuit,n, k; Float=Float32)
+function loglikelihood_k_ones(root::ProbCircuit,n, k,idx_k; Float=Float32)
 
     f_i(node) = begin
-        result = Array{Union{Float64, Nothing}, 1}(nothing, (k+1))
+        result = ones(k+1)*(-Inf)
+        # println("typeof result $(typeof(result))")
         if node.dist.value
-            result[1] = log(0)
-            result[2] = log(1)
+            result[1] = log(0.0)
+            result[2] = log(1.0)
         else
-            result[1] = log(1)
-            result[2] = log(0)
+            result[1] = log(1.0)
+            result[2] = log(0.0)
         end
 
         
         result
     end
     f_s(node, ins) = begin #ins -> a vector of children outpus, each element of vector is of type Array{Union{Float64, Nothing}, 1}
-        result = Array{Union{Float64, Nothing}, 1}(nothing, (k+1))
+        result = ones(k+1)*(-Inf)
         
         for i in 0:k #mapping: 0~k -> 1~k+1
-
-            flag=true
-            for child_result in ins
-                # println("child_result[$(i+1)]: $(child_result[i+1])")
-                if(child_result[i+1]==nothing)
-                    flag=false
-                end
-            end
-                 
-            if flag
-                child_sum = [child_result[i+1] for child_result in ins]
-                result[i+1] = reduce(logsumexp, node.params .+ child_sum) 
-            end                  
+            child_sum = [child[i+1] for child in ins]
+            result[i+1] = reduce(logsumexp, node.params .+ child_sum)              
         end
         #  println("sum node: $(result)")
         result
@@ -100,7 +90,7 @@ function loglikelihood_k_ones(root::ProbCircuit,n, k; Float=Float32)
     end
     
     f_m(node, ins) = begin
-        result = Array{Union{Float64, Nothing}, 1}(nothing, (k+1))
+        result = ones(k+1)*(-Inf)
         for i in 0:k #mapping: 0~k -> 1~k+1
             child_result_l = ins[1]
             child_result_r = ins[2]
@@ -108,11 +98,11 @@ function loglikelihood_k_ones(root::ProbCircuit,n, k; Float=Float32)
             # println("right child: $(child_result_r)")
             temp=[-Inf]
             for j in 0:i
-                if child_result_l[j+1]!=nothing && child_result_r[i-j+1]!=nothing
-                    child_sum = child_result_l[j+1]+child_result_r[i-j+1]
-                    # println("childsum $(child_sum)")
-                    append!(temp,child_sum)
-                end  
+                # if child_result_l[j+1]!=nothing && child_result_r[i-j+1]!=nothing
+                child_sum = child_result_l[j+1]+child_result_r[i-j+1]
+                # println("childsum $(child_sum)")
+                append!(temp,child_sum)
+                # end  
 
             end
             # println("temp $(temp)")
@@ -125,9 +115,9 @@ function loglikelihood_k_ones(root::ProbCircuit,n, k; Float=Float32)
     
     # sum(ins) #product node 
     
-    final=foldup_aggregate(root, f_i, f_m, f_s, Array{Union{Float64, Nothing}, 1})
-    println("final array is $(final)")
-    final=logsumexp(final)
+    final=foldup_aggregate(root, f_i, f_m, f_s, Vector{Float64})
+    # println("final array is $(final)")
+    # final=logsumexp(final[idx_k.+1])
 end
 
 # k = 8
@@ -173,6 +163,18 @@ function convert_product_to_binary(root::ProbCircuit)
     foldup_aggregate(root, f_i, f_m, f_s,Int64)
     total_added
 end
+
+
+function compute_k_distribution(train_data)
+
+    A=sum(train_data,dims=2)
+    x = [[i, count(==(i), A)] for i in unique(A)]
+    x = reduce(hcat,x)
+    x = x[:,sortperm(x[1,:])]
+    # idx = x[1,:] #collect ks that has more than one instances
+    
+end
+
 
 
 #####testing#####
