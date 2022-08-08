@@ -171,6 +171,16 @@ function compute_k_distribution(train_data)
     x = [[i, count(==(i), A)] for i in unique(A)]
     x = reduce(hcat,x)
     x = x[:,sortperm(x[1,:])]
+    k = maximum(sum(Int.(train_data),dims=2))
+    temp = zeros(k+1,1)
+    temp[x[1,:]] = x[2,:]
+    result = Int.(hcat(0:k,temp))
+    # println("result size $(size(result))")
+    # println("x size $(size(x))")
+    # result[:,2][x[1,:]] = x[2,:]
+    # println("result $result")
+    return result
+
     # idx = x[1,:] #collect ks that has more than one instances
     
 end

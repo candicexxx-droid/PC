@@ -21,7 +21,7 @@ function run()
     # train_gpu, test_gpu = move_to_gpu(train_cpu,test_cpu)
 
     # twenty_dataset_names
-    dataset_id=21
+    dataset_id=8
 
     train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[dataset_id])   
     train_cpu=Matrix(train_cpu_t)
@@ -123,10 +123,10 @@ function run()
     open(log_path, "a+") do io
         write(io, "final loglikelihood is $(ll)\n")   
     end;
-    write("log/$(training_ID)_model_test.jpc",pc)
+    write("log/$(training_ID)_model_final.jpc",pc)
     println("final loglikelihood is $(ll)")
     npzwrite("log/$(training_ID)_model_k_loglikelihood.npz",ll)
-    Plots.plot!(0:k,exp.(ll),label = "modeled_distribution",xlabel="k")
+    # Plots.plot!(0:k,exp.(ll),label = "modeled_distribution",xlabel="k")
 
     
     Plots.plot!(0:k,exp.(ll),xlabel = "number of ones in a sample",label = "HCLT modeled_distribution",size = (w, h))
