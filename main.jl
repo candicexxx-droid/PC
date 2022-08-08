@@ -11,6 +11,7 @@ import Plots
 include("utils.jl")
 using Dates
 using NPZ
+
 # using Base:run
 
 
@@ -20,7 +21,7 @@ function run()
     # train_gpu, test_gpu = move_to_gpu(train_cpu,test_cpu)
 
     # twenty_dataset_names
-    dataset_id=8
+    dataset_id=21
 
     train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[dataset_id])   
     train_cpu=Matrix(train_cpu_t)
@@ -59,7 +60,10 @@ function run()
 
 
     # train_data_dist = 
-    Plots.plot(idx_ks[1,:], idx_ks[2,:]./size(train_cpu)[1],label = "train_data_distribution")
+    # Plots.plot(idx_ks[1,:], idx_ks[2,:]./size(train_cpu)[1],label = "train_data_distribution")
+    w=900
+    h=500
+    Plots.plot(idx_ks[1,:], idx_ks[2,:]./size(train_cpu)[1],title="$(twenty_dataset_names[dataset_id]) Distribution: Training Data v.s. Modeled Likelihood", label = "train_data_distribution",size = (w, h),left_margin = 3Plots.cm,top_margin =1.5Plots.cm,right_margin=3Plots.cm, bottom_margin = 1.5Plots.cm)
     # savefig(train_data_dist,"train_data_dist_$(dataset_id)_$(twenty_dataset_names[dataset_id]).png")
 
     open(log_path, "a+") do io
@@ -69,20 +73,16 @@ function run()
     end;
     
 
+
+    write("log/$(training_ID)_model.jpc",pc)
+
+
     
+    println("Finish saving weights")
 
-    print("Moving circuit to GPU... ")
-    CUDA.@time bpc = CuBitsProbCircuit(pc) #move circuit to gpu
-
-    batch_size  = 1024
-    pseudocount = .005
-    softness    = 0
     n = size(train_gpu)[2]
     k = maximum(sum(Int.(train_cpu),dims=2))
     println("n: $(n); k: $(k)\n n/k: $(n/k)")
-    # ll=loglikelihood_k_ones(pc,n,k,idx_ks)
-
-    # println("initial loglikelihood is $(ll)")
 
     open(log_path, "a+") do io
         write(io, "n: $(n); k: $(k)\n")
@@ -90,32 +90,51 @@ function run()
         
     end;
 
-    print("First round of minibatch EM... ")
-    CUDA.@time mini_batch_em(bpc, train_gpu, 100; batch_size, pseudocount, 
-    			 softness, param_inertia = 0.01, param_inertia_end = 0.95)
-    			 
-    CUDA.@time mini_batch_em(bpc, train_gpu, 100; batch_size, pseudocount, 
-    			 softness, param_inertia = 0.95, param_inertia_end = 0.999)
-    
-    CUDA.@time full_batch_em(bpc, train_gpu, 10; batch_size, pseudocount, softness)
 
-    print("Update parameters... ")
-    @time ProbabilisticCircuits.update_parameters(bpc)
-    
-    ll=loglikelihood_k_ones(pc,n,k,idx_ks)
+    #training
+    function training()
+        print("Moving circuit to GPU... ")
+        CUDA.@time bpc = CuBitsProbCircuit(pc) #move circuit to gpu
 
-    println("final loglikelihood is $(ll)")
-    pc
-    open(log_path, "a+") do io
-        write(io, "final loglikelihood is $(ll)\n")
+        batch_size  = 1024
+        pseudocount = .005
+        softness    = 0
         
-    end;
 
-    # train_data_dist = 
-    # bar(0:k, exp.(ll),label = ["model_dist"])
+        print("First round of minibatch EM... ")
+        CUDA.@time mini_batch_em(bpc, train_gpu, 100; batch_size, pseudocount, 
+                    softness, param_inertia = 0.01, param_inertia_end = 0.95)
+                    
+        CUDA.@time mini_batch_em(bpc, train_gpu, 100; batch_size, pseudocount, 
+                    softness, param_inertia = 0.95, param_inertia_end = 0.999)
+        
+        CUDA.@time full_batch_em(bpc, train_gpu, 10; batch_size, pseudocount, softness)
+
+        print("Update parameters... ")
+        @time ProbabilisticCircuits.update_parameters(bpc)
+        return pc
+    end
+
+
+    pc = training()
+
+    #Results Saving
+    ll=loglikelihood_k_ones(pc,n,k,idx_ks)
+    open(log_path, "a+") do io
+        write(io, "final loglikelihood is $(ll)\n")   
+    end;
+    write("log/$(training_ID)_model_test.jpc",pc)
+    println("final loglikelihood is $(ll)")
     npzwrite("log/$(training_ID)_model_k_loglikelihood.npz",ll)
-    Plots.plot!(0:k,exp.(ll),label = "modeled_distribution")
-    Plots.savefig("log/model_dist_v.s._train_$(training_ID).png")
+    Plots.plot!(0:k,exp.(ll),label = "modeled_distribution",xlabel="k")
+
+    
+    Plots.plot!(0:k,exp.(ll),xlabel = "number of ones in a sample",label = "HCLT modeled_distribution",size = (w, h))
+    Plots.savefig("log/model_dist_v.s._train_$(training_ID)_test.png")
+
+
+
+
 
     
 
