@@ -21,13 +21,13 @@ function run()
     # train_gpu, test_gpu = move_to_gpu(train_cpu,test_cpu)
 
     # twenty_dataset_names
-    dataset_id=8
+    dataset_id=21
 
     train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[dataset_id])   
     train_cpu=Matrix(train_cpu_t)
     # # [1:20,1:5]
     test_cpu = Matrix(test_cpu_t)
-    [1:20,1:5]
+    
 
     train_gpu,test_gpu = move_to_gpu(train_cpu,test_cpu)
 
@@ -74,7 +74,7 @@ function run()
     
 
 
-    write("log/$(training_ID)_model.jpc",pc)
+    write("log/$(training_ID)_model_inital.jpc",pc)
 
 
     
@@ -119,6 +119,7 @@ function run()
     pc = training()
 
     #Results Saving
+    println("computing loglikelihood_k_ones...")
     ll=loglikelihood_k_ones(pc,n,k,idx_ks)
     open(log_path, "a+") do io
         write(io, "final loglikelihood is $(ll)\n")   
