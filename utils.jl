@@ -61,11 +61,12 @@ function softmax(x)
 sum(exp.(x))
 end
 
-function loglikelihood_k_ones(root::ProbCircuit,n, k,idx_k; Float=Float32)
+function loglikelihood_k_ones(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float32)
 
+    #input nodes: randvar::BitSet, dist
     f_i(node) = begin
         result = ones(k+1)*(-Inf)
-        # println("typeof result $(typeof(result))")
+        println("randvar node at f_i $(node.randvars)")
         if node.dist.value
             result[1] = log(0.0)
             result[2] = log(1.0)

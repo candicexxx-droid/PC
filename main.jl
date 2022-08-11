@@ -120,7 +120,7 @@ function run()
 
     #Results Saving
     println("computing loglikelihood_k_ones...")
-    ll=loglikelihood_k_ones(pc,n,k,idx_ks)
+    ll=loglikelihood_k_ones(pc,n,k)
     open(log_path, "a+") do io
         write(io, "final loglikelihood is $(ll)\n")   
     end;
