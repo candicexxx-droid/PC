@@ -61,12 +61,39 @@ function softmax(x)
 sum(exp.(x))
 end
 
+function compute_scope(root::ProbCircuit)
+    #assign scope to each node
+    f_i(node) =begin
+        node.scope = node.randvars
+        node.scope
+    end
+
+    f_s(node,ins)= begin
+        node.scope = ins[1]
+        node.scope
+    end
+
+    f_m(node,ins)= begin
+        # println("compute scope fm")
+        # println(ins)
+        # println("inputs node at f_m $(node.inputs)")
+        for s in ins
+            union!(node.scope, s)
+        end
+        # println(node.scope)
+        node.scope
+    end
+
+    foldup_aggregate(root, f_i, f_m, f_s, BitSet)
+
+end
+
 function loglikelihood_k_ones(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float32)
 
     #input nodes: randvar::BitSet, dist
     f_i(node) = begin
         result = ones(k+1)*(-Inf)
-        println("randvar node at f_i $(node.randvars)")
+        # println("scope node at f_i $(node.scope)")
         if node.dist.value
             result[1] = log(0.0)
             result[2] = log(1.0)
@@ -80,7 +107,7 @@ function loglikelihood_k_ones(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float
     end
     f_s(node, ins) = begin #ins -> a vector of children outpus, each element of vector is of type Array{Union{Float64, Nothing}, 1}
         result = ones(k+1)*(-Inf)
-        
+        # println("scope node at f_s $(node.scope)")
         for i in 0:k #mapping: 0~k -> 1~k+1
             child_sum = [child[i+1] for child in ins]
             result[i+1] = reduce(logsumexp, node.params .+ child_sum)              
@@ -92,6 +119,8 @@ function loglikelihood_k_ones(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float
     
     f_m(node, ins) = begin
         result = ones(k+1)*(-Inf)
+        # println("scope node at f_m $(node.scope)")
+        # println("inputs node at f_m $(node.inputs)")
         for i in 0:k #mapping: 0~k -> 1~k+1
             child_result_l = ins[1]
             child_result_r = ins[2]
@@ -189,6 +218,163 @@ function compute_k_distribution(train_data)
     return result
     
 end
+function split_rand_vars(scope::BitSet,group_size::Int)
+    #split global scope into group_num group_splitting
+    # println(scope)
+    l = length(scope)
+    scope = deepcopy(scope)
+    group_num = div(l,group_size)
+    mod = l%group_size
+    var_group_map=Dict()
+    group_num += (mod>0)
+    splited = Vector{BitSet}(undef,group_num)
+    for i in 1:group_num
+        temp=BitSet()
+        if mod>0 && i==group_num
+            for i in 1:mod
+                var = pop!(scope)
+                push!(temp,var)
+                var_group_map[var] = i
+                
+            end
+        else
+            for j in 1:group_size
+                # println("group_size")
+                # println(group_size)
+                # println("forloop")
+                # println(scope)
+                var = pop!(scope)
+                push!(temp,var)
+                var_group_map[var] = i
+            end
+        end
+        
+        
+        
+        splited[i] = temp
+    end
+
+    
+    # println(group_num)
+    
+
+
+    return splited, var_group_map
+    # , group_num
+end
+
+function compute_ks(train_cpu,splitted)
+    ks = []
+    for i in 1:size(splitted)[1]
+        group = [j for j in splitted[i]]
+        s = minimum(group)
+        f = maximum(group)
+        temp = maximum(sum(Int.(train_cpu[:,s:f]),dims=2))
+        append!(ks, temp)
+    end
+    ks .+= 1 #including k =0 case #ks is (k1+1,k2+1,...)
+    ks = Tuple(k for k in ks)
+
+end
+
+
+function print_scope(root)
+    #for debugging
+    f_i(node) = begin
+        println("Input Node")
+        println(node.scope)
+        0
+    end
+     f_s(node, ins) = begin
+         println("Sum Node")
+         println(node.scope)
+         0
+    end
+
+    f_m(node, ins) = begin
+        println("Prod Node")
+        println(node.scope)
+        0
+    end
+
+    
+    foldup_aggregate(root, f_i, f_m, f_s,Int)
+
+end
+
+function log_k_likelihood_wrt_split(root, var_group_map,ks)
+    #var_group_map: var-> group index
+    #ks: max k wrt each group 
+    # result[k1+1, k2+1,...,km+1] -> pr(node, k1,k2,...,km)
+    #group num = 2
+    f_i(node) = begin
+        result = ones(ks)*(-Inf)
+        var = [i for i in node.randvars]
+        g = var_group_map[var[1]]
+        idx_zero =[1 for i in 1:length(ks)] #idx  (k1=1,k2=1,...,km=1)
+        idx_one = deepcopy(idx_zero)#idx 
+        idx_one[g] = 2 #(k1=1,k2=1,...,g=2,..., km=1)
+        idx_zero = CartesianIndex(Tuple(idx_zero))
+        idx_one = CartesianIndex(Tuple(idx_one))
+        
+
+
+        if node.dist.value
+
+            result[idx_zero] = log(0.0)
+            result[idx_one] = log(1.0)
+        else
+            result[idx_zero] = log(1.0)
+            result[idx_one] = log(0.0)
+        end
+
+        return result
+
+
+        
+    end
+    f_s(node, ins) = begin #ins -> a vector of children outpus, each element of vector is of type Array{Union{Float64, Nothing}, 1}
+        result = ones(ks)*(-Inf)
+        all_idxs = CartesianIndices(ks)
+        for i in all_idxs #mapping: 0~k -> 1~k+1
+            child_sum = [child[i] for child in ins]
+            result[i] = reduce(logsumexp, node.params .+ child_sum)              
+        end 
+ 
+        return result
+    end
+    
+    f_m(node, ins) = begin
+        result = ones(ks)*(-Inf)
+        all_idxs = CartesianIndices(ks)
+        child_result_l = ins[1]
+        child_result_r = ins[2]
+        for i in all_idxs
+            temp=[-Inf]
+            println("curr i")
+            println(i)
+            sub_all_idxs = CartesianIndices(i)
+            println("prod")
+            println(sub_all_idxs)
+
+        end
+        
+        return result
+
+    end
+
+    foldup_aggregate(root, f_i, f_m, f_s, Array{Float64})
+
+
+end
+
+
+function plot_pc(pc; save_path="plot")
+    TikzPictures.standaloneWorkaround(true)  # workaround
+    z = plot(pc);
+    save(PDF(save_path), z);
+
+end
 
 
 
@@ -223,4 +409,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     v=loglikelihood_k_ones(pc,3,3)
     println("loglikelihood of <= k is $(v)")
 end
+
+
 # X1, X2, X3 = literals(ProbCircuit, 3)
+
