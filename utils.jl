@@ -6,6 +6,7 @@ using CUDA
 using Combinatorics
 using SplitApplyCombine
 using TikzPictures;
+using Dates
 
 
 
@@ -146,8 +147,11 @@ function loglikelihood_k_ones(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float
     # sum(ins) #product node 
     
     final=foldup_aggregate(root, f_i, f_m, f_s, Vector{Float64})
-    # println("final array is $(final)")
-    # final=logsumexp(final[idx_k.+1])
+    println("final array is $(final)")
+    marginal=sum(exp.(final))
+    
+    return final, marginal
+    
 end
 
 # k = 8
@@ -218,6 +222,52 @@ function compute_k_distribution(train_data)
     return result
     
 end
+
+function compute_k_distribution_wrt_split(train_data,splitted,ks;return_reduced_train_data=false,smooth=0.001)
+    result = zeros(ks)
+    data_size = size(train_data)[1]
+    reduced_train_data = zeros(data_size,length(ks)) #represent each example from binary to k1,k2,...,km
+
+    for (data_ind, group) in enumerate(splitted)
+        extract_idx = [i for i in group]
+        reduced_train_data[:,data_ind] = sum(train_data[:,extract_idx], dims=2)
+    end
+    if return_reduced_train_data
+        #return_reduced_train_data used as index for result-shaped ll
+        reduced_train_data = reduced_train_data .+1
+        reduced_train_data = [CartesianIndex(Tuple(Int.(reduced_train_data)[i,:])) for i in 1:data_size]
+        # return_reduced_train_data = [typeof(Int.(reduced_train_data)[i,:]) for i in 1:size(reduced_train_data)[1]]
+        return reduced_train_data
+    end
+    uniq = unique(reduced_train_data,dims=1)
+    
+    x = [[CartesianIndex(Tuple(Int.(uniq[i,:].+1))), sum(sum(reduced_train_data.==(reshape(uniq[i,:], (1,size(uniq[i,:])[1]))),dims=2).==length(ks))] for i in 1:size(uniq)[1]]
+    x = reduce(hcat,x)#convert x to a matrix
+    # println("size(x)")
+    # println(size(x))
+    for i in 1:size(x)[2]
+        idx,val = x[:,i]
+        # println(idx)
+        # println(val)
+        result[idx] = val
+    end
+    
+    result = result.+smooth
+    result = result ./sum(result)
+    # /data_size
+    # println(result)
+
+
+end
+
+function generate_training_ID(dataset_id)
+    timenow = Dates.now()
+    time = Dates.format(timenow, "dd-u-yy-HH-MM-SS")
+    training_ID = time * "_" * twenty_dataset_names[dataset_id] * "_$(dataset_id)"
+    return training_ID
+end
+
+
 function split_rand_vars(scope::BitSet,group_size::Int)
     #split global scope into group_num group_splitting
     # println(scope)
@@ -231,7 +281,7 @@ function split_rand_vars(scope::BitSet,group_size::Int)
     for i in 1:group_num
         temp=BitSet()
         if mod>0 && i==group_num
-            for i in 1:mod
+            for j in 1:mod
                 var = pop!(scope)
                 push!(temp,var)
                 var_group_map[var] = i
@@ -288,6 +338,7 @@ function print_scope(root)
      f_s(node, ins) = begin
          println("Sum Node")
          println(node.scope)
+         println(node.params)
          0
     end
 
@@ -316,9 +367,6 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks)
         idx_one[g] = 2 #(k1=1,k2=1,...,g=2,..., km=1)
         idx_zero = CartesianIndex(Tuple(idx_zero))
         idx_one = CartesianIndex(Tuple(idx_one))
-        
-
-
         if node.dist.value
 
             result[idx_zero] = log(0.0)
@@ -340,30 +388,69 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks)
             child_sum = [child[i] for child in ins]
             result[i] = reduce(logsumexp, node.params .+ child_sum)              
         end 
- 
+        # println("sum")
+        # println(result)
         return result
     end
     
     f_m(node, ins) = begin
         result = ones(ks)*(-Inf)
-        all_idxs = CartesianIndices(ks)
+        
+        groups = unique([var_group_map[i] for i in node.scope])
+        local_ks = [ i in groups ? i : 1 for i in ks]
+        all_idxs = CartesianIndices(Tuple(i for i in local_ks))
+        # scope_l = node.inputs[1].scope
+        # scope_r = node.inputs[2].scope
+
+
+        # group_l = unique([var_group_map[i] for i in scope_l])
+        # group_r = unique([var_group_map[i] for i in scope_r])
+        # println("group l $(group_l)")
+        # println("group r $(group_r)")
+
+        # group = unique([var_group_map[i] for i in node.scope])
+        # println("group  $(group)")
+
         child_result_l = ins[1]
         child_result_r = ins[2]
         for i in all_idxs
             temp=[-Inf]
-            println("curr i")
-            println(i)
+            # println("======curr i========")
+            # println(i)
+            # println("======curr i========")
             sub_all_idxs = CartesianIndices(i)
-            println("prod")
-            println(sub_all_idxs)
+            # println("sub_all_idxs=========")
+            # println(sub_all_idxs)
+            # println("sub_all_idxs=========")
+            # println("children result left =========")
+            # println(child_result_l)
+            # println("children result right =========")
+            # println(child_result_r)
+            # println("complement idx =========")
+            for j in sub_all_idxs
+                #compute complement:
+                comp_idx = CartesianIndex(Tuple(i).-Tuple(j).+1)
+                # print(comp_idx)
+                child_sum  = child_result_l[j] + child_result_r[comp_idx]
+                append!(temp,child_sum)
 
+            end 
+            # println("\ncomplement idx =========")
+            # println("prod temp")
+            # println(temp)        
+            result[i] = logsumexp(temp)
         end
-        
+        # println("prod")
+        # println(result)
         return result
 
     end
 
-    foldup_aggregate(root, f_i, f_m, f_s, Array{Float64})
+    result = foldup_aggregate(root, f_i, f_m, f_s, Array{Float64})
+    # final_idx = CartesianIndex(ks)
+    marginal=logsumexp(result)
+    # println(marginal)
+    return result,marginal
 
 
 end

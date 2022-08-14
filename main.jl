@@ -21,10 +21,10 @@ function run()
     # train_gpu, test_gpu = move_to_gpu(train_cpu,test_cpu)
 
     # twenty_dataset_names
-    dataset_id=21
+    dataset_id=1
 
     train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[dataset_id])   
-    train_cpu=Matrix(train_cpu_t)
+    train_cpu=Matrix(train_cpu_t)[1:100,1:3]
     # # [1:20,1:5]
     test_cpu = Matrix(test_cpu_t)
     
@@ -35,9 +35,9 @@ function run()
     latents = 64
     pseudocount = 0.01
 
-    timenow = Dates.now()
-    time = Dates.format(timenow, "dd-u-yy-HH-MM-SS")
-    training_ID = time * "_" * twenty_dataset_names[dataset_id] * "_$(dataset_id)"
+    # timenow = Dates.now()
+    # time = Dates.format(timenow, "dd-u-yy-HH-MM-SS")
+    training_ID = generate_training_ID(dataset_id)
     log_path = "log/$(training_ID)_hclt.txt"
 
     open(log_path, "a+") do io
