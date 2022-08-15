@@ -13,11 +13,25 @@ using Dates
 using NPZ
 using Statistics
 using Debugger
-dataset_id=1
-
+dataset_id=21
 train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[dataset_id])   
 
 function main()
+
+    #parameters
+    param_dict=Dict()
+    param_dict["latents"] = 64
+    param_dict["pseudocount"] = 0.005
+    param_dict["batch_size"] = 1024
+    param_dict["softness"] = 0
+    param_dict["group_size"] = 392
+    param_dict["run_single_dim"] = true
+    latents = param_dict["latents"] 
+    pseudocount = param_dict["pseudocount"]
+    batch_size  = param_dict["batch_size"]
+    softness    = param_dict["softness"]
+    group_size = param_dict["group_size"] #group_num = ceil(num_vars/group_size)
+    
     
     train_cpu=Matrix(train_cpu_t)
     # train_cpu = train_cpu[1:100,1:2]
@@ -35,9 +49,7 @@ function main()
     # # 
     test_cpu = Matrix(test_cpu_t)
 
-    latents = 64
-    pseudocount = 0.01
-
+    
     @time pc = hclt(train_cpu, latents; pseudocount, input_type = Literal);
     convert_product_to_binary(pc)
     compute_scope(pc)
@@ -45,7 +57,7 @@ function main()
 
 
     #group_splitting
-    group_size = 60 #group_num = ceil(num_vars/group_size)
+    
     group_num = Int(ceil(n/group_size))
 
     @assert group_num ==2 #check if group num is desired, if not adjust group_size!
@@ -57,18 +69,21 @@ function main()
     # println(var_group_map)
     # ll=loglikelihood_k_ones(pc,n,k)
     open(log_path, "a+") do io
+        write(io, "params: $param_dict\n")
         write(io, "group size: $group_size; group_num: $group_num\n")
     end;
 
     #train prior wrt to splited group
-    batch_size  = 32
-    pseudocount = .005
-    softness    = 0
+    
 
 
     ks = compute_ks(train_cpu, splitted)
+
     open(log_path, "a+") do io
         write(io, "computing ks distribution...\n")
+    end;
+    open(log_path, "a+") do io
+        write(io, "n: $(n); k: $(k)\n")
     end;
     println("computing ks distribution...")
     ks_train_dist=compute_k_distribution_wrt_split(train_cpu,splitted,ks)
@@ -79,11 +94,6 @@ function main()
     CUDA.@time bpc = CuBitsProbCircuit(pc)
      #move circuit to gpu
     function training()
-        
-
-        
-        
-
         print("First round of minibatch EM... ")
         CUDA.@time mini_batch_em(bpc, train_gpu, 100; batch_size, pseudocount, 
                     softness, param_inertia = 0.01, param_inertia_end = 0.95)
@@ -104,23 +114,31 @@ function main()
     # open(log_path, "a+") do io
     #     write(io, "before training marginal wrt to all ks: $marginal\n")
     # end;
+
+    #Training
     pc= training()
-
-    write("log/$(training_ID)_model_final.jpc",pc)
-    # ll, marginal = loglikelihood_k_ones(pc,n,k)
-    ll, marginal = log_k_likelihood_wrt_split(pc, var_group_map,ks)
-    npzwrite("log/$(training_ID)_model_k_splitted_loglikelihood.npz",ll)
-    println("after training wrt to all ks")
-    println(marginal)
-    open(log_path, "a+") do io
-        write(io, "after training marginal wrt to all ks: $marginal\n")
-    end;
-    # println("typeof(test_gpu): $(typeof(test_gpu))")
-
     test_ll = loglikelihoods(bpc,test_gpu;batch_size=batch_size)
     open(log_path, "a+") do io
         write(io, "after training avg test likelihoood without recalibration: $(mean(test_ll))\n")
     end;
+
+    write("log/$(training_ID)_model_final.jpc",pc)
+    if param_dict["run_single_dim"]
+        ll, marginal = loglikelihood_k_ones(pc,n,k)
+    else
+        ll, marginal = log_k_likelihood_wrt_split(pc, var_group_map,ks,group_num)
+    end
+    # ll, marginal = loglikelihood_k_ones(pc,n,k)
+    
+    npzwrite("log/$(training_ID)_model_k_splitted_loglikelihood.npz",ll)
+    println("after training wrt to all ks")
+    println(marginal)
+    open(log_path, "a+") do io
+        write(io, "after training marginal wrt to all ks in log space: $marginal\n")
+    end;
+    # println("typeof(test_gpu): $(typeof(test_gpu))")
+
+    
     #recalibration:
     reduced_train_data = compute_k_distribution_wrt_split(train_cpu,splitted,ks;return_reduced_train_data=true)
     # println(size(reduced_train_data))
@@ -128,8 +146,9 @@ function main()
     ks_test_modeled_dist = ll[reduced_train_data]
     af_bf_diff =  mean(ks_test_train_dist.-ks_test_modeled_dist) #should be less than 0
     open(log_path, "a+") do io
-        write(io, "recalibration improvement (<0 then performance improves): $af_bf_diff\n")
+        write(io, "recalibration improvement (>0 then performance improves): $af_bf_diff\n")
     end;
+    println("recalibration improvement (>0 then performance improves): $af_bf_diff")
 
 
 end

@@ -148,7 +148,8 @@ function loglikelihood_k_ones(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float
     
     final=foldup_aggregate(root, f_i, f_m, f_s, Vector{Float64})
     println("final array is $(final)")
-    marginal=sum(exp.(final))
+    # marginal=sum(exp.(final))
+    marginal = logsumexp(final)
     
     return final, marginal
     
@@ -353,11 +354,12 @@ function print_scope(root)
 
 end
 
-function log_k_likelihood_wrt_split(root, var_group_map,ks)
+function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     #var_group_map: var-> group index
     #ks: max k wrt each group 
     # result[k1+1, k2+1,...,km+1] -> pr(node, k1,k2,...,km)
     #group num = 2
+    group_scope = BitSet(1:group_num)
     f_i(node) = begin
         result = ones(ks)*(-Inf)
         var = [i for i in node.randvars]
@@ -396,13 +398,18 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks)
     f_m(node, ins) = begin
         result = ones(ks)*(-Inf)
         
-        groups = unique([var_group_map[i] for i in node.scope])
-        local_ks = [ i in groups ? i : 1 for i in ks]
+        groups_comp = setdiff(group_scope, BitSet((var_group_map[i] for i in node.scope)))
+        groups_comp = [i for i in groups_comp]
+        local_ks = [ i for i in ks] #a copy of ks in vector
+        # println("groups_comp")
+        # println(groups_comp)
+        if size(groups_comp)[1] >0
+            local_ks[groups_comp] .=  1
+        end
         all_idxs = CartesianIndices(Tuple(i for i in local_ks))
         # scope_l = node.inputs[1].scope
         # scope_r = node.inputs[2].scope
-
-
+        
         # group_l = unique([var_group_map[i] for i in scope_l])
         # group_r = unique([var_group_map[i] for i in scope_r])
         # println("group l $(group_l)")
