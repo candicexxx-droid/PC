@@ -451,7 +451,7 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     # result[k1+1, k2+1,...,km+1] -> pr(node, k1,k2,...,km)
     #group num = 2
     group_scope = BitSet(1:group_num)
-    
+    result_dim = length(ks)
     function narrow_enums(node_scope)
         #given scope of a node, determine all enumerations needed given the split group that the node is in
         
@@ -551,31 +551,33 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
             child_result_l = ins[1]
             child_result_r = ins[2]
             for i in all_idxs_p
-                temp=[-Inf]
+                
                 # println("======curr i========")
                 # println(i)
                 # println("======curr i========")
                 sub_all_idxs = CartesianIndices(i)
-                # println("sub_all_idxs=========")
-                # println(sub_all_idxs)
-                # println("sub_all_idxs=========")
-                # println("children result left =========")
-                # println(child_result_l)
-                # println("children result right =========")
-                # println(child_result_r)
-                # println("complement idx =========")
-                for j in sub_all_idxs
-                    #compute complement:
-                    comp_idx = CartesianIndex(Tuple(i).-Tuple(j).+1)
-                    # print(comp_idx)
-                    child_sum  = child_result_l[j] + child_result_r[comp_idx]
-                    append!(temp,child_sum)
+                sub_child_result_l = child_result_l[sub_all_idxs]
+                sub_child_result_r = child_result_r[sub_all_idxs]
+                for d in 1:result_dim #reverse in every dimension
+                    sub_child_result_r=reverse(sub_child_result_r,dims=d)
+                end
+                temp=sub_child_result_l.+sub_child_result_r
+                result[i] = logsumexp(temp)
 
-                end 
+
+                
+                # for j in sub_all_idxs
+                #     #compute complement:
+                #     comp_idx = CartesianIndex(Tuple(i).-Tuple(j).+1)
+                #     # print(comp_idx)
+                #     child_sum  = child_result_l[j] + child_result_r[comp_idx]
+                #     append!(temp,child_sum)
+
+                # end 
                 # println("\ncomplement idx =========")
                 # println("prod temp")
                 # println(temp)        
-                result[i] = logsumexp(temp)
+                
             end
             
         end
