@@ -8,7 +8,18 @@ using SplitApplyCombine
 using TikzPictures;
 using Dates
 
+function check_debugging()
+    print("Debug Mode? (enter y or n)\n") 
+  
+    # Calling rdeadline() function
+    usrinput = readline()=="y"
+    if usrinput
+        print("Debugging mode") 
+    end
+    return usrinput!=true
+    # println("The name is ", name)
 
+end
 
 
 function mnist_cpu()
@@ -89,11 +100,85 @@ function compute_scope(root::ProbCircuit)
 
 end
 
+
+function loglikelihood_k_ones_real_space(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float32)
+    #for debugging purpose
+    #input nodes: randvar::BitSet, dist
+    f_i(node) = begin
+        result = Float32.(ones(k+1)*(0.0))
+        # println("scope node at f_i $(node.scope)")
+        if node.dist.value
+            result[1] = 0.0
+            result[2] = 1.0
+        else
+            result[1] = 1.0
+            result[2] = 0.0
+        end
+
+
+        return result
+        
+    end
+    f_s(node, ins) = begin #ins -> a vector of children outpus, each element of vector is of type Array{Union{Float64, Nothing}, 1}
+        result = Float32.(ones(k+1)*(0.0))
+        # println("scope node at f_s $(node.scope)")
+        println("weights are $(exp.(node.params)), sum: $(sum(exp.(node.params)))")     
+        println("child $(ins)")
+        for i in 0:k #mapping: 0~k -> 1~k+1
+            child_sum = [child[i+1] for child in ins]
+            # result[i+1] = reduce(logsumexp, node.params .+ child_sum)    
+            result[i+1] = sum((exp.(node.params)) .* child_sum) 
+                
+        end
+         println("sum node: $(result), marginal wrt all ks is $(sum(result))")
+        result
+        # reduce(logsumexp, node.params .+ ins) #sum node     
+    end
+    
+    f_m(node, ins) = begin
+        result = Float32.(ones(k+1)*(0.0))
+        # println("scope node at f_m $(node.scope)")
+        # println("inputs node at f_m $(node.inputs)")
+        for i in 0:k #mapping: 0~k -> 1~k+1
+            child_result_l = ins[1]
+            child_result_r = ins[2]
+            # println("left child:$(child_result_l)")
+            # println("right child: $(child_result_r)")
+            temp=[0.0]
+            for j in 0:i
+                # if child_result_l[j+1]!=nothing && child_result_r[i-j+1]!=nothing
+                child_sum = child_result_l[j+1]*child_result_r[i-j+1]
+                # println("childsum $(child_sum)")
+                append!(temp,child_sum)
+                # end  
+
+            end
+            # println("temp $(temp)")
+            result[i+1] = sum(temp)
+                            
+        end
+        println("prod node: $(result) marginal wrt all ks is $(sum(result))")
+        result
+    end
+    
+    # sum(ins) #product node 
+    
+    final=foldup_aggregate(root, f_i, f_m, f_s, Vector{Float32})
+    println("final array is $(final)")
+    # marginal=sum(exp.(final))
+    marginal = sum(final)
+    
+    return final, marginal
+    
+end
+
+
+
 function loglikelihood_k_ones(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float32)
 
     #input nodes: randvar::BitSet, dist
     f_i(node) = begin
-        result = ones(k+1)*(-Inf)
+        result = Float32.(ones(k+1)*(-Inf))
         # println("scope node at f_i $(node.scope)")
         if node.dist.value
             result[1] = log(0.0)
@@ -107,19 +192,22 @@ function loglikelihood_k_ones(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float
         result
     end
     f_s(node, ins) = begin #ins -> a vector of children outpus, each element of vector is of type Array{Union{Float64, Nothing}, 1}
-        result = ones(k+1)*(-Inf)
+        result = Float32.(ones(k+1)*(-Inf))
         # println("scope node at f_s $(node.scope)")
+        # println("weight sum $(logsumexp(node.params))")
         for i in 0:k #mapping: 0~k -> 1~k+1
             child_sum = [child[i+1] for child in ins]
-            result[i+1] = reduce(logsumexp, node.params .+ child_sum)              
+            # result[i+1] = reduce(logsumexp, node.params .+ child_sum)  
+              
+            result[i+1] = logsumexp(Float64.(node.params) .+ child_sum)          
         end
-        #  println("sum node: $(result)")
+        #  println("sum node: $(exp.(result))")
         result
         # reduce(logsumexp, node.params .+ ins) #sum node     
     end
     
     f_m(node, ins) = begin
-        result = ones(k+1)*(-Inf)
+        result = Float32.(ones(k+1)*(-Inf))
         # println("scope node at f_m $(node.scope)")
         # println("inputs node at f_m $(node.inputs)")
         for i in 0:k #mapping: 0~k -> 1~k+1
@@ -127,12 +215,15 @@ function loglikelihood_k_ones(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float
             child_result_r = ins[2]
             # println("left child:$(child_result_l)")
             # println("right child: $(child_result_r)")
-            temp=[-Inf]
+            temp=Float32.(ones(i+1)*(-Inf))
             for j in 0:i
                 # if child_result_l[j+1]!=nothing && child_result_r[i-j+1]!=nothing
                 child_sum = child_result_l[j+1]+child_result_r[i-j+1]
                 # println("childsum $(child_sum)")
-                append!(temp,child_sum)
+                # append!(temp,child_sum)
+                temp[j+1]=child_sum
+
+
                 # end  
 
             end
@@ -140,14 +231,14 @@ function loglikelihood_k_ones(root::ProbCircuit,n, k,; idx_k=nothing,Float=Float
             result[i+1] = logsumexp(temp)
                             
         end
-        #  println("prod node: $(result)")
+        # println("prod node: $(exp.(result))")
         result
     end
     
     # sum(ins) #product node 
     
-    final=foldup_aggregate(root, f_i, f_m, f_s, Vector{Float64})
-    println("final array is $(final)")
+    final=foldup_aggregate(root, f_i, f_m, f_s, Vector{Float32})
+    # println("final array is $(final)")
     # marginal=sum(exp.(final))
     marginal = logsumexp(final)
     
@@ -360,6 +451,8 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     # result[k1+1, k2+1,...,km+1] -> pr(node, k1,k2,...,km)
     #group num = 2
     group_scope = BitSet(1:group_num)
+    all_idxs_s = CartesianIndices(ks)
+    
     f_i(node) = begin
         result = ones(ks)*(-Inf)
         var = [i for i in node.randvars]
@@ -385,10 +478,10 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     end
     f_s(node, ins) = begin #ins -> a vector of children outpus, each element of vector is of type Array{Union{Float64, Nothing}, 1}
         result = ones(ks)*(-Inf)
-        all_idxs = CartesianIndices(ks)
-        for i in all_idxs #mapping: 0~k -> 1~k+1
+        
+        for i in all_idxs_s #mapping: 0~k -> 1~k+1
             child_sum = [child[i] for child in ins]
-            result[i] = reduce(logsumexp, node.params .+ child_sum)              
+            result[i] = logsumexp(node.params .+ child_sum)              
         end 
         # println("sum")
         # println(result)
@@ -398,7 +491,7 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     f_m(node, ins) = begin
         result = ones(ks)*(-Inf)
         
-        groups_comp = setdiff(group_scope, BitSet((var_group_map[i] for i in node.scope)))
+        groups_comp = setdiff(group_scope, BitSet((var_group_map[i] for i in node.scope))) #group index that is disjoint with current node's scope
         groups_comp = [i for i in groups_comp]
         local_ks = [ i for i in ks] #a copy of ks in vector
         # println("groups_comp")
@@ -406,7 +499,7 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         if size(groups_comp)[1] >0
             local_ks[groups_comp] .=  1
         end
-        all_idxs = CartesianIndices(Tuple(i for i in local_ks))
+         #enumerate all index, length of Tuple is the dimension
         # scope_l = node.inputs[1].scope
         # scope_r = node.inputs[2].scope
         
@@ -417,36 +510,40 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
 
         # group = unique([var_group_map[i] for i in node.scope])
         # println("group  $(group)")
+        @time begin
+            all_idxs_p = CartesianIndices(Tuple(i for i in local_ks))
+            child_result_l = ins[1]
+            child_result_r = ins[2]
+            for i in all_idxs_p
+                temp=[-Inf]
+                # println("======curr i========")
+                # println(i)
+                # println("======curr i========")
+                sub_all_idxs = CartesianIndices(i)
+                # println("sub_all_idxs=========")
+                # println(sub_all_idxs)
+                # println("sub_all_idxs=========")
+                # println("children result left =========")
+                # println(child_result_l)
+                # println("children result right =========")
+                # println(child_result_r)
+                # println("complement idx =========")
+                for j in sub_all_idxs
+                    #compute complement:
+                    comp_idx = CartesianIndex(Tuple(i).-Tuple(j).+1)
+                    # print(comp_idx)
+                    child_sum  = child_result_l[j] + child_result_r[comp_idx]
+                    append!(temp,child_sum)
 
-        child_result_l = ins[1]
-        child_result_r = ins[2]
-        for i in all_idxs
-            temp=[-Inf]
-            # println("======curr i========")
-            # println(i)
-            # println("======curr i========")
-            sub_all_idxs = CartesianIndices(i)
-            # println("sub_all_idxs=========")
-            # println(sub_all_idxs)
-            # println("sub_all_idxs=========")
-            # println("children result left =========")
-            # println(child_result_l)
-            # println("children result right =========")
-            # println(child_result_r)
-            # println("complement idx =========")
-            for j in sub_all_idxs
-                #compute complement:
-                comp_idx = CartesianIndex(Tuple(i).-Tuple(j).+1)
-                # print(comp_idx)
-                child_sum  = child_result_l[j] + child_result_r[comp_idx]
-                append!(temp,child_sum)
-
-            end 
-            # println("\ncomplement idx =========")
-            # println("prod temp")
-            # println(temp)        
-            result[i] = logsumexp(temp)
+                end 
+                # println("\ncomplement idx =========")
+                # println("prod temp")
+                # println(temp)        
+                result[i] = logsumexp(temp)
+            end
+            
         end
+        
         # println("prod")
         # println(result)
         return result
