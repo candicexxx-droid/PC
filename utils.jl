@@ -481,8 +481,9 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         idx_zero = CartesianIndex(Tuple(idx_zero))
         idx_one = CartesianIndex(Tuple(idx_one))
 
-        local_ks = narrow_enums(node.scope)
-
+        # local_ks = narrow_enums(node.scope)
+        # all_idxs_s = CartesianIndices(Tuple(i for i in local_ks))
+    
         if node.dist.value
 
             result[idx_zero] = log(0.0)
@@ -498,14 +499,26 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         
     end
     f_s(node, ins) = begin #ins -> a vector of children outpus, each element of vector is of type Array{Union{Float64, Nothing}, 1}
-        result = ones(ks)*(-Inf)
+        # result = ones(ks)*(-Inf)
         local_ks = narrow_enums(node.scope)
         all_idxs_s = CartesianIndices(Tuple(i for i in local_ks))
+        total_dim = ndims(ins[1])+1
+        stacked_child_result = cat(ins...,dims=total_dim)
+        reshaped_params = Int.(ones(total_dim))
+        # println("size(node.params)")
+        # println(size(node.params))
+        reshaped_params[end] = size(node.params)[1]
+        reshaped_params = Tuple(i for i in reshaped_params)
         
-        for i in all_idxs_s #mapping: 0~k -> 1~k+1
-            child_sum = [child[i] for child in ins]
-            result[i] = logsumexp(node.params .+ child_sum)              
-        end 
+        reshaped_params = reshape(node.params, reshaped_params)
+        elem_res = broadcast(+,reshaped_params,stacked_child_result)
+        result = reshape(logsumexp(elem_res, dims=total_dim),ks)
+
+
+        # for i in all_idxs_s #mapping: 0~k -> 1~k+1
+        #     child_sum = [child[i] for child in ins]
+        #     result[i] = logsumexp(node.params .+ child_sum)              
+        # end 
         # println("sum")
         # println(result)
         return result
