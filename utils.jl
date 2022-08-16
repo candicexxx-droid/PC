@@ -457,20 +457,16 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         
         #for every group, get the number of vars in that group 
         count = zeros(length(ks))
+        # println("node_scope")
+        # println(node_scope)
         for i in node_scope
             count[var_group_map[i]]+=1
         end
 
         local_ks = count .+1 #convert count to idx s.t. it can be passed into Cartesian Indices
-        local_ks = min.(local_ks, [i for i in ks])
-        # groups_comp = setdiff(group_scope, BitSet((var_group_map[i] for i in node_scope))) #group index that is disjoint with current node's scope
-        # groups_comp = [i for i in groups_comp]
-        # local_ks = [ i for i in ks] #a copy of ks in vector
-        # # println("groups_comp")
-        # # println(groups_comp)
-        # if size(groups_comp)[1] >0
-        #     local_ks[groups_comp] .=  1
-        # end
+        local_ks = Int.(min.(local_ks, [i for i in ks]))
+        # println("local_ks")
+        # println(local_ks)
         return local_ks
         
     end
@@ -484,6 +480,9 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         idx_one[g] = 2 #(k1=1,k2=1,...,g=2,..., km=1)
         idx_zero = CartesianIndex(Tuple(idx_zero))
         idx_one = CartesianIndex(Tuple(idx_one))
+
+        local_ks = narrow_enums(node.scope)
+
         if node.dist.value
 
             result[idx_zero] = log(0.0)
@@ -500,7 +499,7 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     end
     f_s(node, ins) = begin #ins -> a vector of children outpus, each element of vector is of type Array{Union{Float64, Nothing}, 1}
         result = ones(ks)*(-Inf)
-        local_ks = narrow_enums(scope)
+        local_ks = narrow_enums(node.scope)
         all_idxs_s = CartesianIndices(Tuple(i for i in local_ks))
         
         for i in all_idxs_s #mapping: 0~k -> 1~k+1
