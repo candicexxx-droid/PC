@@ -447,11 +447,33 @@ end
 
 function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     #var_group_map: var-> group index
-    #ks: max k wrt each group 
+    #ks: tuple, max k wrt each group 
     # result[k1+1, k2+1,...,km+1] -> pr(node, k1,k2,...,km)
     #group num = 2
     group_scope = BitSet(1:group_num)
-    all_idxs_s = CartesianIndices(ks)
+    
+    function narrow_enums(node_scope)
+        #given scope of a node, determine all enumerations needed given the split group that the node is in
+        
+        #for every group, get the number of vars in that group 
+        count = zeros(length(ks))
+        for i in node_scope
+            count[var_group_map[i]]+=1
+        end
+
+        local_ks = count .+1 #convert count to idx s.t. it can be passed into Cartesian Indices
+        local_ks = min.(local_ks, [i for i in ks])
+        # groups_comp = setdiff(group_scope, BitSet((var_group_map[i] for i in node_scope))) #group index that is disjoint with current node's scope
+        # groups_comp = [i for i in groups_comp]
+        # local_ks = [ i for i in ks] #a copy of ks in vector
+        # # println("groups_comp")
+        # # println(groups_comp)
+        # if size(groups_comp)[1] >0
+        #     local_ks[groups_comp] .=  1
+        # end
+        return local_ks
+        
+    end
     
     f_i(node) = begin
         result = ones(ks)*(-Inf)
@@ -478,6 +500,8 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     end
     f_s(node, ins) = begin #ins -> a vector of children outpus, each element of vector is of type Array{Union{Float64, Nothing}, 1}
         result = ones(ks)*(-Inf)
+        local_ks = narrow_enums(scope)
+        all_idxs_s = CartesianIndices(Tuple(i for i in local_ks))
         
         for i in all_idxs_s #mapping: 0~k -> 1~k+1
             child_sum = [child[i] for child in ins]
@@ -490,15 +514,15 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     
     f_m(node, ins) = begin
         result = ones(ks)*(-Inf)
-        
-        groups_comp = setdiff(group_scope, BitSet((var_group_map[i] for i in node.scope))) #group index that is disjoint with current node's scope
-        groups_comp = [i for i in groups_comp]
-        local_ks = [ i for i in ks] #a copy of ks in vector
-        # println("groups_comp")
-        # println(groups_comp)
-        if size(groups_comp)[1] >0
-            local_ks[groups_comp] .=  1
-        end
+        local_ks = narrow_enums(node.scope)
+        # groups_comp = setdiff(group_scope, BitSet((var_group_map[i] for i in node.scope))) #group index that is disjoint with current node's scope
+        # groups_comp = [i for i in groups_comp]
+        # local_ks = [ i for i in ks] #a copy of ks in vector
+        # # println("groups_comp")
+        # # println(groups_comp)
+        # if size(groups_comp)[1] >0
+        #     local_ks[groups_comp] .=  1
+        # end
          #enumerate all index, length of Tuple is the dimension
         # scope_l = node.inputs[1].scope
         # scope_r = node.inputs[2].scope

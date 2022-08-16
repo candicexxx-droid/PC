@@ -23,7 +23,7 @@ function main()
 
     #parameters
     param_dict=Dict()
-    param_dict["latents"] = 16
+    param_dict["latents"] = 64
     param_dict["pseudocount"] = 0.005
     param_dict["batch_size"] = 1024 #use 1024 for actual training
     param_dict["softness"] = 0
@@ -31,6 +31,7 @@ function main()
     param_dict["group_num"] = 2
     param_dict["run_single_dim"] = false
     param_dict["train"] = true
+    param_dict["chpt_id"] = "15-Aug-22-18-46-01_binarized_mnist_21"
     latents = param_dict["latents"] 
     pseudocount = param_dict["pseudocount"]
     batch_size  = param_dict["batch_size"]
@@ -43,7 +44,7 @@ function main()
     train_cpu = train_cpu
     # [1:100,1:15]
     # 
-    # 
+    
     n = size(train_cpu)[2]
     k = maximum(sum(Int.(train_cpu),dims=2))
     println("k is $(k)")
@@ -60,43 +61,49 @@ function main()
     println("pseudocount")
     println(pseudocount)
     @time pc = hclt(train_cpu, latents; pseudocount, input_type = Literal);
-    init_parameters(pc; perturbation = 0.4);
-    convert_product_to_binary(pc)
-    compute_scope(pc)
 
-
-
-    #group_splitting
     
+
+    
+    convert_product_to_binary(pc)
+    init_parameters(pc; perturbation = 0.4);
+    compute_scope(pc)
     group_num = Int(ceil(n/group_size))
 
     @assert group_num ==expected_group_num #check if group num is desired, if not adjust group_size!
     global_scope = BitSet(1:n)
     # pc.scope
-    println("number of multiplication nodes: $(length(mulnodes(pc)))")
-    println("number of sum nodes: $(length(sumnodes(pc)))")
+    
     splitted, var_group_map=split_rand_vars(global_scope,group_size)
-
-    # println(var_group_map)
-    # ll=loglikelihood_k_ones(pc,n,k)
-    if not_debugging
-        open(log_path, "a+") do io
-            write(io, "params: $param_dict\n")
-            write(io, "group size: $group_size; group_num: $group_num\n")
-        end;
-
-    end
-    
-
-    #train prior wrt to splited group
-    
-
-
     ks = compute_ks(train_cpu, splitted)
     println("computing ks distribution...")
     ks_train_dist=compute_k_distribution_wrt_split(train_cpu,splitted,ks)
-    if not_debugging
+    
+
+
+    if length(param_dict["chpt_id"])>0
+
+        param_dict["train"] = false
+        println(param_dict["chpt_id"])
+        chpt="log/" * param_dict["chpt_id"]*"_model_final.jpc"
+        pc = read(chpt, ProbCircuit)
+        training_ID = param_dict["chpt_id"]
+        compute_scope(pc)
+        println("loaded!")
+    end
+    println("number of multiplication nodes: $(length(mulnodes(pc)))")
+    println("number of sum nodes: $(length(sumnodes(pc)))")
+    print("Moving circuit to GPU... ")
+    CUDA.@time bpc = CuBitsProbCircuit(pc)
+
+
+    #group_splitting
+    
+    
+    if not_debugging && param_dict["train"]
         open(log_path, "a+") do io
+            write(io, "params: $param_dict\n")
+            write(io, "group size: $group_size; group_num: $group_num\n")
             write(io, "computing ks distribution...\n")
             write(io, "n: $(n); k: $(k)\n")
             write(io, "ks: $ks\n")
@@ -105,8 +112,7 @@ function main()
     end
 
     
-    print("Moving circuit to GPU... ")
-    CUDA.@time bpc = CuBitsProbCircuit(pc)
+    
      #move circuit to gpu
     function training()
         print("First round of minibatch EM... ")
@@ -135,7 +141,7 @@ function main()
         pc= training()
     end
     test_ll = loglikelihoods(bpc,test_gpu;batch_size=batch_size)
-    if not_debugging
+    if not_debugging && param_dict["train"]
         open(log_path, "a+") do io
             write(io, "after training avg test likelihoood without recalibration: $(mean(test_ll))\n")
         end;
@@ -147,6 +153,7 @@ function main()
     if param_dict["run_single_dim"]
         ll, marginal = loglikelihood_k_ones(pc,n,k)
     else
+        println("hihi")
         ll, marginal = log_k_likelihood_wrt_split(pc, var_group_map,ks,group_num)
     end
     # ll, marginal = loglikelihood_k_ones(pc,n,k)

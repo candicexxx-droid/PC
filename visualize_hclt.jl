@@ -28,7 +28,7 @@ pseudocount = 0.01
 batch_s = 1
 
 @time pc = hclt(train_cpu, latents; pseudocount, input_type = Literal);
-model_path = "/space/candicecai/PC/log/15-Aug-22-14-39-16_accidents_1_model_final.jpc"
+model_path = "/space/candicecai/PC/log/15-Aug-22-14-39-16_accidents_1_model_final_2vars_sanitycheck.jpc"#
 pc = read(model_path, ProbCircuit)
 println("loaded!")
 CUDA.@time bpc = CuBitsProbCircuit(pc) 
@@ -48,6 +48,7 @@ marginal = logsumexp(ll)
 marginal_wrt_k = logsumexp(ll_k)
 println("brute force marginal is $marginal")
 println("marginal_wrt_k is $marginal_wrt_k")
-
-
+#should be
+#brute force marginal is 0.0
+# marginal_wrt_k is 5.9604645e-8
 
