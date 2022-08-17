@@ -19,8 +19,8 @@ train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[datas
 
 function main()
 
-    not_debugging = check_debugging()
-    # not_debugging = true
+    # not_debugging = check_debugging()
+    not_debugging = true
     cuda=2
     # sqrt(-1) #stoppping teh program
     device!(collect(devices())[cuda])

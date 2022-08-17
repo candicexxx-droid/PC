@@ -538,19 +538,25 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
                 
                 
                 sub_all_idxs = CartesianIndices(i)
-                # println("before $sub_all_idxs")
+                println("before $sub_all_idxs")
+                #debugging
+                    println("child_result_l $child_result_l")
+                    println("child_result_r $child_result_r")
                 sub_idx_l = intersect(sub_all_idxs,CartesianIndices(child_result_l))
                 sub_idx_r = intersect(sub_all_idxs,CartesianIndices(child_result_r))
                 sub_all_idxs = intersect(sub_idx_l,sub_idx_r)
+                    #debugging
+                    println("sub_idx_l $sub_idx_l")
+                    println("sub_idx_r $sub_idx_r")
+                    println("sub_all_idxs $sub_all_idxs")
                 sub_child_result_l = child_result_l[sub_all_idxs]
                 sub_child_result_r = child_result_r[sub_all_idxs]
-                # println("after $sub_all_idxs")
                 for d in 1:result_dim #reverse in every dimension
                     sub_child_result_r=reverse(sub_child_result_r,dims=d)
                 end
                 temp=sub_child_result_l.+sub_child_result_r
+                println("at $i: temp: $temp")
                 if i2==40
-                    println("at $i: temp: $temp")
                     sqrt(-2)
                 end
                 
