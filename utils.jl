@@ -450,8 +450,9 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     #ks: tuple, max k wrt each group 
     # result[k1+1, k2+1,...,km+1] -> pr(node, k1,k2,...,km)
     #group num = 2
-    group_scope = BitSet(1:group_num)
+    # group_scope = BitSet(1:group_num)
     result_dim = length(ks)
+    
     function narrow_enums(node_scope)
         #given scope of a node, determine all enumerations needed given the split group that the node is in
         
@@ -467,15 +468,19 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         local_ks = Int.(min.(local_ks, [i for i in ks]))
         # println("local_ks")
         # println(local_ks)
+        local_ks = Tuple(i for i in local_ks)
         return local_ks
         
     end
     
     f_i(node) = begin
-        result = ones(ks)*(-Inf)
+        local_ks = narrow_enums(node.scope)
+        all_idxs = CartesianIndices(local_ks)
+        
+        result = ones(Tuple(i for i in local_ks))*(-Inf)
         var = [i for i in node.randvars]
         g = var_group_map[var[1]]
-        idx_zero =[1 for i in 1:length(ks)] #idx  (k1=1,k2=1,...,km=1)
+        idx_zero =[1 for i in 1:length(local_ks)] #idx  (k1=1,k2=1,...,km=1)
         idx_one = deepcopy(idx_zero)#idx 
         idx_one[g] = 2 #(k1=1,k2=1,...,g=2,..., km=1)
         idx_zero = CartesianIndex(Tuple(idx_zero))
@@ -492,6 +497,9 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
             result[idx_zero] = log(1.0)
             result[idx_one] = log(0.0)
         end
+        # println("input node result")
+        # println(result)
+        # sqrt(-2)
 
         return result
 
@@ -501,7 +509,8 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
     f_s(node, ins) = begin #ins -> a vector of children outpus, each element of vector is of type Array{Union{Float64, Nothing}, 1}
         # result = ones(ks)*(-Inf)
         local_ks = narrow_enums(node.scope)
-        all_idxs_s = CartesianIndices(Tuple(i for i in local_ks))
+        # local_ks = Tuple(i for i in local_ks)
+        # all_idxs_s = CartesianIndices(Tuple(i for i in local_ks))
         total_dim = ndims(ins[1])+1
         stacked_child_result = cat(ins...,dims=total_dim)
         reshaped_params = Int.(ones(total_dim))
@@ -512,56 +521,36 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         
         reshaped_params = reshape(node.params, reshaped_params)
         elem_res = broadcast(+,reshaped_params,stacked_child_result)
-        result = reshape(logsumexp(elem_res, dims=total_dim),ks)
+        result = reshape(logsumexp(elem_res, dims=total_dim),local_ks)
 
-
-        # for i in all_idxs_s #mapping: 0~k -> 1~k+1
-        #     child_sum = [child[i] for child in ins]
-        #     result[i] = logsumexp(node.params .+ child_sum)              
-        # end 
-        # println("sum")
-        # println(result)
         return result
     end
     
     f_m(node, ins) = begin
-        result = ones(ks)*(-Inf)
-        local_ks = narrow_enums(node.scope)
-        # groups_comp = setdiff(group_scope, BitSet((var_group_map[i] for i in node.scope))) #group index that is disjoint with current node's scope
-        # groups_comp = [i for i in groups_comp]
-        # local_ks = [ i for i in ks] #a copy of ks in vector
-        # # println("groups_comp")
-        # # println(groups_comp)
-        # if size(groups_comp)[1] >0
-        #     local_ks[groups_comp] .=  1
-        # end
-         #enumerate all index, length of Tuple is the dimension
-        # scope_l = node.inputs[1].scope
-        # scope_r = node.inputs[2].scope
         
-        # group_l = unique([var_group_map[i] for i in scope_l])
-        # group_r = unique([var_group_map[i] for i in scope_r])
-        # println("group l $(group_l)")
-        # println("group r $(group_r)")
-
-        # group = unique([var_group_map[i] for i in node.scope])
-        # println("group  $(group)")
+        local_ks = narrow_enums(node.scope)
+        result = ones(local_ks)*(-Inf)
         @time begin
-            all_idxs_p = CartesianIndices(Tuple(i for i in local_ks))
+            all_idxs_p = CartesianIndices(local_ks)
             child_result_l = ins[1]
             child_result_r = ins[2]
             for i in all_idxs_p
                 
-                # println("======curr i========")
-                # println(i)
-                # println("======curr i========")
+                
                 sub_all_idxs = CartesianIndices(i)
+                # println("before $sub_all_idxs")
+                sub_idx_l = intersect(sub_all_idxs,CartesianIndices(child_result_l))
+                sub_idx_r = intersect(sub_all_idxs,CartesianIndices(child_result_r))
+                sub_all_idxs = intersect(sub_idx_l,sub_idx_r)
                 sub_child_result_l = child_result_l[sub_all_idxs]
                 sub_child_result_r = child_result_r[sub_all_idxs]
+                # println("after $sub_all_idxs")
                 for d in 1:result_dim #reverse in every dimension
                     sub_child_result_r=reverse(sub_child_result_r,dims=d)
                 end
                 temp=sub_child_result_l.+sub_child_result_r
+                println("at $i: temp: $temp")
+                sqrt(-2)
                 result[i] = logsumexp(temp)
 
 
@@ -581,9 +570,6 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
             end
             
         end
-        
-        # println("prod")
-        # println(result)
         return result
 
     end

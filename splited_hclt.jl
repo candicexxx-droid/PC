@@ -14,13 +14,13 @@ using NPZ
 using Statistics
 using Debugger
 
-dataset_id=21
+dataset_id=1
 train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[dataset_id])   
 
 function main()
 
-    # not_debugging = check_debugging()
-    not_debugging = true
+    not_debugging = check_debugging()
+    # not_debugging = true
     cuda=2
     # sqrt(-1) #stoppping teh program
     device!(collect(devices())[cuda])
@@ -30,11 +30,11 @@ function main()
     param_dict["pseudocount"] = 0.005
     param_dict["batch_size"] = 1024 #use 1024 for actual training
     param_dict["softness"] = 0
-    param_dict["group_size"] = 392
+    param_dict["group_size"] = 60 
     param_dict["group_num"] = 2
     param_dict["run_single_dim"] = false
     param_dict["train"] = true
-    param_dict["chpt_id"] = "16-Aug-22-14-44-49_binarized_mnist_21"
+    param_dict["chpt_id"] = "16-Aug-22-16-27-50_accidents_1"
     # "16-Aug-22-16-27-50_accidents_1"
     # "16-Aug-22-14-44-49_binarized_mnist_21" -103.12377
     #"15-Aug-22-18-46-01_binarized_mnist_21"
@@ -82,8 +82,7 @@ function main()
     
     splitted, var_group_map=split_rand_vars(global_scope,group_size)
     ks = compute_ks(train_cpu, splitted)
-    println("computing ks distribution...")
-    ks_train_dist=log.(compute_k_distribution_wrt_split(train_cpu,splitted,ks))
+    
     # println("ks_train_dist[1:10,:]")
     # println(ks_train_dist[1:10,:])
 
@@ -100,8 +99,7 @@ function main()
     end
     println("number of multiplication nodes: $(length(mulnodes(pc)))")
     println("number of sum nodes: $(length(sumnodes(pc)))")
-    print("Moving circuit to GPU... ")
-    CUDA.@time bpc = CuBitsProbCircuit(pc)
+    
 
 
     #group_splitting
@@ -122,6 +120,8 @@ function main()
     
      #move circuit to gpu
     function training()
+        print("Moving circuit to GPU... ")
+        CUDA.@time bpc = CuBitsProbCircuit(pc)
         print("First round of minibatch EM... ")
         CUDA.@time mini_batch_em(bpc, train_gpu, 100; batch_size, pseudocount, 
                     softness, param_inertia = 0.01, param_inertia_end = 0.95)
@@ -133,7 +133,7 @@ function main()
 
         print("Update parameters... ")
         @time ProbabilisticCircuits.update_parameters(bpc)
-        return pc
+        return bpc,pc
     end
     # ll, marginal = loglikelihood_k_ones(pc,n,k)
     # ll, marginal = log_k_likelihood_wrt_split(pc, var_group_map,ks)
@@ -145,23 +145,27 @@ function main()
 
     #Training
     if param_dict["train"]
-        pc= training()
+        bpc,pc= training()
         write("log/$(training_ID)_model_final.jpc",pc)
+        test_ll = loglikelihoods(bpc,test_gpu;batch_size=batch_size)
+        if not_debugging 
+            open(log_path, "a+") do io
+                write(io, "after training avg test likelihoood without recalibration: $(mean(test_ll))\n")
+            end;
+        end
     end
     reduced_train_data = compute_k_distribution_wrt_split(train_cpu,splitted,ks;return_reduced_train_data=true)
     # println("reduced_train_data[1:10,:]")
     # println(reduced_train_data[1:10,:])
+    println("computing ks distribution...")
+    ks_train_dist=log.(compute_k_distribution_wrt_split(train_cpu,splitted,ks))
     ks_test_train_dist = ks_train_dist[reduced_train_data]
     # println("ks_test_train_dist[1:10,:]")
     # println(ks_test_train_dist[1:10,:])
 
     
-    test_ll = loglikelihoods(bpc,test_gpu;batch_size=batch_size)
-    if not_debugging && param_dict["train"]
-        open(log_path, "a+") do io
-            write(io, "after training avg test likelihoood without recalibration: $(mean(test_ll))\n")
-        end;
-    end
+
+    
 
     
 
