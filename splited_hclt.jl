@@ -20,7 +20,8 @@ train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[datas
 function main()
 
     not_debugging = check_debugging()
-
+    cuda=2
+    device!(collect(devices())[cuda])
     #parameters
     param_dict=Dict()
     param_dict["latents"] = 64
@@ -31,7 +32,10 @@ function main()
     param_dict["group_num"] = 2
     param_dict["run_single_dim"] = false
     param_dict["train"] = true
-    param_dict["chpt_id"] = "15-Aug-22-18-46-01_binarized_mnist_21"
+    param_dict["chpt_id"] = "16-Aug-22-14-44-49_binarized_mnist_21"
+    # "16-Aug-22-16-27-50_accidents_1"
+    # "16-Aug-22-14-44-49_binarized_mnist_21" -103.12377
+    #"15-Aug-22-18-46-01_binarized_mnist_21"
     latents = param_dict["latents"] 
     pseudocount = param_dict["pseudocount"]
     batch_size  = param_dict["batch_size"]
@@ -52,7 +56,7 @@ function main()
     train_gpu,test_gpu = move_to_gpu(train_cpu,test_cpu)
 
     training_ID = generate_training_ID(dataset_id)
-    log_path = "log/$(training_ID)_splited.txt"
+    
     println("size of train cpu")
     println(size(train_cpu))
     # 
@@ -77,8 +81,9 @@ function main()
     splitted, var_group_map=split_rand_vars(global_scope,group_size)
     ks = compute_ks(train_cpu, splitted)
     println("computing ks distribution...")
-    ks_train_dist=compute_k_distribution_wrt_split(train_cpu,splitted,ks)
-    
+    ks_train_dist=log.(compute_k_distribution_wrt_split(train_cpu,splitted,ks))
+    # println("ks_train_dist[1:10,:]")
+    # println(ks_train_dist[1:10,:])
 
 
     if length(param_dict["chpt_id"])>0
@@ -98,7 +103,7 @@ function main()
 
 
     #group_splitting
-    
+    log_path = "log/$(training_ID)_splited.txt"
     
     if not_debugging && param_dict["train"]
         open(log_path, "a+") do io
@@ -139,7 +144,16 @@ function main()
     #Training
     if param_dict["train"]
         pc= training()
+        write("log/$(training_ID)_model_final.jpc",pc)
     end
+    reduced_train_data = compute_k_distribution_wrt_split(train_cpu,splitted,ks;return_reduced_train_data=true)
+    # println("reduced_train_data[1:10,:]")
+    # println(reduced_train_data[1:10,:])
+    ks_test_train_dist = ks_train_dist[reduced_train_data]
+    # println("ks_test_train_dist[1:10,:]")
+    # println(ks_test_train_dist[1:10,:])
+
+    # sqrt(-1) #stoppping teh program
     test_ll = loglikelihoods(bpc,test_gpu;batch_size=batch_size)
     if not_debugging && param_dict["train"]
         open(log_path, "a+") do io
@@ -149,7 +163,7 @@ function main()
 
     
 
-    write("log/$(training_ID)_model_final.jpc",pc)
+    
     if param_dict["run_single_dim"]
         ll, marginal = loglikelihood_k_ones(pc,n,k)
     else
@@ -174,15 +188,19 @@ function main()
 
     
     #recalibration:
-    reduced_train_data = compute_k_distribution_wrt_split(train_cpu,splitted,ks;return_reduced_train_data=true)
+    
     # println(sum(train_cpu,dims=2))
     # println(reduced_train_data)
     ks_test_train_dist = ks_train_dist[reduced_train_data]
     ks_test_modeled_dist = ll[reduced_train_data]
     af_bf_diff =  mean(ks_test_train_dist.-ks_test_modeled_dist) #should be less than 0
-    if not_debugging
+    if not_debugging && !param_dict["run_single_dim"]
         open(log_path, "a+") do io
-            write(io, "recalibration improvement (>0 then performance improves): $af_bf_diff\n")
+            write(io, "recalibration improvement (>0 then performance improves) with $(param_dict["group_num"]) groups of group size $(param_dict["group_size"]): $af_bf_diff\n")
+        end;
+    else
+        open(log_path, "a+") do io
+            write(io, "recalibration improvement (>0 then performance improves) with 1-d k: $af_bf_diff\n")
         end;
     end
     

@@ -66,7 +66,10 @@ function test(model_path::AbstractString, modeled_k_dist_path::AbstractString,da
     # smoothed_train_size = sum((idx_ks[2,:]))
     log_q_k=log.(((q_k)./smoothed_train_size)) #q(k)
     test_cpu_t_k = sum(test_cpu,dims=2)
-    
+    println("test_cpu_t_k[1:10]")
+    println(test_cpu_t_k[1:10])
+    println("log_q_k[1:10]")
+    println(log_q_k[1:10])
     # println("size idx_ks $(size(idx_ks))")
     k_test_train_dist = log_q_k[test_cpu_t_k.+1]#q(k(x))size: num_data,1,CuArray{Float32, 1, CUDA.Mem.DeviceBuffer}
     
