@@ -19,8 +19,10 @@ train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[datas
 
 function main()
 
-    not_debugging = check_debugging()
+    # not_debugging = check_debugging()
+    not_debugging = true
     cuda=2
+    # sqrt(-1) #stoppping teh program
     device!(collect(devices())[cuda])
     #parameters
     param_dict=Dict()
@@ -153,7 +155,7 @@ function main()
     # println("ks_test_train_dist[1:10,:]")
     # println(ks_test_train_dist[1:10,:])
 
-    # sqrt(-1) #stoppping teh program
+    
     test_ll = loglikelihoods(bpc,test_gpu;batch_size=batch_size)
     if not_debugging && param_dict["train"]
         open(log_path, "a+") do io
