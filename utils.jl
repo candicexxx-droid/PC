@@ -535,9 +535,14 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
             all_idxs_p = CartesianIndices(local_ks)
             child_result_l = ins[1]
             child_result_r = ins[2]
+            ##restore the dimension of children to maintain index integrity
+            child_result_l_base, child_result_r_base= ones(ks)*(-Inf),ones(ks)*(-Inf)
+            child_result_l_idx, child_result_r_idx = CartesianIndices(child_result_l), CartesianIndices(child_result_r)
+            child_result_l_base[child_result_l_idx],child_result_r_base[child_result_r_idx] = child_result_l, child_result_r
+            child_result_l,child_result_r = child_result_l_base, child_result_r_base
+
             for (i2,i) in enumerate(all_idxs_p)
-                
-                
+
                 sub_all_idxs = CartesianIndices(i)
                 println("before $sub_all_idxs")
                 #debugging
@@ -557,9 +562,9 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
                 end
                 temp=sub_child_result_l.+sub_child_result_r
                 println("at $i: temp: $temp")
-                if i2==40
-                    sqrt(-2)
-                end
+                # if i2==40
+                #     sqrt(-2)
+                # end
                 
                 result[i] = logsumexp(temp)
 
