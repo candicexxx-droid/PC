@@ -514,6 +514,7 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         total_dim = ndims(ins[1])+1
         stacked_child_result = cat(ins...,dims=total_dim)
         reshaped_params = Int.(ones(total_dim))
+        println("stacked_child_result: $stacked_child_result")
         # println("size(node.params)")
         # println(size(node.params))
         reshaped_params[end] = size(node.params)[1]

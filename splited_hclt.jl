@@ -28,13 +28,13 @@ function main()
     param_dict=Dict()
     param_dict["latents"] = 64
     param_dict["pseudocount"] = 0.005
-    param_dict["batch_size"] = 1024 #use 1024 for actual training
+    param_dict["batch_size"] = 10 #use 1024 for actual training
     param_dict["softness"] = 0
-    param_dict["group_size"] = 60 
+    param_dict["group_size"] = 3 
     param_dict["group_num"] = 2
     param_dict["run_single_dim"] = false
-    param_dict["train"] = true
-    param_dict["chpt_id"] = "16-Aug-22-16-27-50_accidents_1"
+    param_dict["train"] = false
+    param_dict["chpt_id"] = ""
     # "16-Aug-22-16-27-50_accidents_1"
     # "16-Aug-22-14-44-49_binarized_mnist_21" -103.12377
     #"15-Aug-22-18-46-01_binarized_mnist_21"
@@ -46,8 +46,8 @@ function main()
     expected_group_num = param_dict["group_num"]
     
     train_cpu=Matrix(train_cpu_t)
-    # [1:100,1:2]
-    train_cpu = train_cpu
+    # 
+    train_cpu = train_cpu[1:100,1:6]
     # [1:100,1:15]
     # 
     
@@ -219,5 +219,6 @@ end
 
 
 main()
+
 
 
