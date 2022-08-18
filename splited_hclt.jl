@@ -20,7 +20,7 @@ train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[datas
 function main()
 
     # not_debugging = check_debugging()
-    not_debugging = true
+    not_debugging = false
     cuda=2
     # sqrt(-1) #stoppping teh program
     device!(collect(devices())[cuda])
@@ -34,10 +34,11 @@ function main()
     param_dict["group_num"] = 2
     param_dict["run_single_dim"] = false
     param_dict["train"] = false
-    param_dict["chpt_id"] = ""
+    param_dict["chpt_id"] = "17-Aug-22-17-16-15_accidents_1" #for computation verification 
     # "16-Aug-22-16-27-50_accidents_1"
     # "16-Aug-22-14-44-49_binarized_mnist_21" -103.12377
     #"15-Aug-22-18-46-01_binarized_mnist_21"
+    # "17-Aug-22-17-16-15_accidents_1"
     latents = param_dict["latents"] 
     pseudocount = param_dict["pseudocount"]
     batch_size  = param_dict["batch_size"]
@@ -154,6 +155,7 @@ function main()
             end;
         end
     end
+    
     reduced_train_data = compute_k_distribution_wrt_split(train_cpu,splitted,ks;return_reduced_train_data=true)
     # println("reduced_train_data[1:10,:]")
     # println(reduced_train_data[1:10,:])

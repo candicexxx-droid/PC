@@ -523,7 +523,7 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         reshaped_params = reshape(node.params, reshaped_params)
         elem_res = broadcast(+,reshaped_params,stacked_child_result)
         result = reshape(logsumexp(elem_res, dims=total_dim),local_ks)
-
+        println("result: $result")
         return result
     end
     
