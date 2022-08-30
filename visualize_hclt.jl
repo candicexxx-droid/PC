@@ -38,7 +38,10 @@ sanity_check_data = [0 0; 1 0; 0 1;1 1]
 sanity_check_data,train_gpu = move_to_gpu(sanity_check_data,train_cpu)
 
 ll = loglikelihoods(bpc,sanity_check_data;batch_size=batch_s)
-ll_k = loglikelihood_k_ones(pc,2,2)[1]
+t=time()
+ll_k,_ = loglikelihood_k_ones(pc,2,2)
+el = time()-t
+println("t is $el")
 TikzPictures.standaloneWorkaround(true)  # workaround
 z = plot(pc);
 save(PDF("plot"), z);

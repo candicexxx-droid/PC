@@ -14,31 +14,40 @@ using NPZ
 using Statistics
 using Debugger
 
-dataset_id=1
+dataset_id=21
 train_cpu_t, valid_data, test_cpu_t = twenty_datasets(twenty_dataset_names[dataset_id])   
 
 function main()
 
     # not_debugging = check_debugging()
-    not_debugging = false
+    not_debugging = true
     cuda=2
     # sqrt(-1) #stoppping teh program
     device!(collect(devices())[cuda])
     #parameters
     param_dict=Dict()
-    param_dict["latents"] = 64
+    param_dict["latents"] = 14
     param_dict["pseudocount"] = 0.005
-    param_dict["batch_size"] = 10 #use 1024 for actual training
+    param_dict["batch_size"] = 1024 #use 1024 for actual training
     param_dict["softness"] = 0
-    param_dict["group_size"] = 3 
+    param_dict["group_size"] = 392
     param_dict["group_num"] = 2
     param_dict["run_single_dim"] = false
     param_dict["train"] = false
-    param_dict["chpt_id"] = "17-Aug-22-17-16-15_accidents_1" #for computation verification 
+    param_dict["chpt_id"] = "19-Aug-22-15-56-08_binarized_mnist_21" # with 14 latent
+     # "19-Aug-22-14-38-47_binarized_mnist_21" #with 16 latent
+     # "19-Aug-22-14-39-15_binarized_mnist_21" #with 12 latent
+    #
+    # "19-Aug-22-14-39-44_binarized_mnist_21" #with 10 latent
+    # "19-Aug-22-14-06-15_binarized_mnist_21" # with 6 latent
+    # "19-Aug-22-14-02-05_binarized_mnist_21" #bmnist with 4 latent
+    # "19-Aug-22-13-04-48_binarized_mnist_21" #bmnist with 8 latent
+    # "19-Aug-22-13-10-28_binarized_mnist_21" #bmnist with 2 latent
     # "16-Aug-22-16-27-50_accidents_1"
-    # "16-Aug-22-14-44-49_binarized_mnist_21" -103.12377
+    # "16-Aug-22-14-44-49_binarized_mnist_21"  #-103. with 64 latent
     #"15-Aug-22-18-46-01_binarized_mnist_21"
     # "17-Aug-22-17-16-15_accidents_1"
+    # "17-Aug-22-17-16-15_accidents_1" #for computation verification 
     latents = param_dict["latents"] 
     pseudocount = param_dict["pseudocount"]
     batch_size  = param_dict["batch_size"]
@@ -48,7 +57,7 @@ function main()
     
     train_cpu=Matrix(train_cpu_t)
     # 
-    train_cpu = train_cpu[1:100,1:6]
+    # train_cpu = train_cpu[1:100,1:6]
     # [1:100,1:15]
     # 
     
@@ -112,7 +121,9 @@ function main()
             write(io, "group size: $group_size; group_num: $group_num\n")
             write(io, "computing ks distribution...\n")
             write(io, "n: $(n); k: $(k)\n")
-            write(io, "ks: $ks\n")
+            
+            write(io, "number of multiplication nodes: $(length(mulnodes(pc)))\n")
+            write(io, "number of sum nodes: $(length(sumnodes(pc)))\n")
         end;
 
     end
@@ -173,10 +184,14 @@ function main()
 
     
     if param_dict["run_single_dim"]
+        t = time()
         ll, marginal = loglikelihood_k_ones(pc,n,k)
+        el = time()-t
     else
         println("hihi")
+        t = time()
         ll, marginal = log_k_likelihood_wrt_split(pc, var_group_map,ks,group_num)
+        el = time()-t
     end
     # ll, marginal = loglikelihood_k_ones(pc,n,k)
     
@@ -204,11 +219,15 @@ function main()
     af_bf_diff =  mean(ks_test_train_dist.-ks_test_modeled_dist) #should be less than 0
     if not_debugging && !param_dict["run_single_dim"]
         open(log_path, "a+") do io
+            write(io, "ks: $ks\n")
             write(io, "recalibration improvement (>0 then performance improves) with $(param_dict["group_num"]) groups of group size $(param_dict["group_size"]): $af_bf_diff\n")
+            write(io, "log likelihood wrt k computation took $el seconds.\n")
         end;
     else
         open(log_path, "a+") do io
+            
             write(io, "recalibration improvement (>0 then performance improves) with 1-d k: $af_bf_diff\n")
+            write(io, "log likelihood wrt k computation took $el seconds.\n")
         end;
     end
     

@@ -514,7 +514,7 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         total_dim = ndims(ins[1])+1
         stacked_child_result = cat(ins...,dims=total_dim)
         reshaped_params = Int.(ones(total_dim))
-        println("stacked_child_result: $stacked_child_result")
+        # println("stacked_child_result: $stacked_child_result")
         # println("size(node.params)")
         # println(size(node.params))
         reshaped_params[end] = size(node.params)[1]
@@ -523,7 +523,7 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
         reshaped_params = reshape(node.params, reshaped_params)
         elem_res = broadcast(+,reshaped_params,stacked_child_result)
         result = reshape(logsumexp(elem_res, dims=total_dim),local_ks)
-        println("result: $result")
+        # println("result: $result")
         return result
     end
     
@@ -544,24 +544,24 @@ function log_k_likelihood_wrt_split(root, var_group_map,ks,group_num)
             for (i2,i) in enumerate(all_idxs_p)
 
                 sub_all_idxs = CartesianIndices(i)
-                println("before $sub_all_idxs")
-                #debugging
-                    println("child_result_l $child_result_l")
-                    println("child_result_r $child_result_r")
+                # println("before $sub_all_idxs")
+                # #debugging
+                #     println("child_result_l $child_result_l")
+                #     println("child_result_r $child_result_r")
                 sub_idx_l = intersect(sub_all_idxs,CartesianIndices(child_result_l))
                 sub_idx_r = intersect(sub_all_idxs,CartesianIndices(child_result_r))
                 sub_all_idxs = intersect(sub_idx_l,sub_idx_r)
-                    #debugging
-                    println("sub_idx_l $sub_idx_l")
-                    println("sub_idx_r $sub_idx_r")
-                    println("sub_all_idxs $sub_all_idxs")
+                    # #debugging
+                    # println("sub_idx_l $sub_idx_l")
+                    # println("sub_idx_r $sub_idx_r")
+                    # println("sub_all_idxs $sub_all_idxs")
                 sub_child_result_l = child_result_l[sub_all_idxs]
                 sub_child_result_r = child_result_r[sub_all_idxs]
                 for d in 1:result_dim #reverse in every dimension
                     sub_child_result_r=reverse(sub_child_result_r,dims=d)
                 end
                 temp=sub_child_result_l.+sub_child_result_r
-                println("at $i: temp: $temp")
+                # println("at $i: temp: $temp")
                 # if i2==40
                 #     sqrt(-2)
                 # end
